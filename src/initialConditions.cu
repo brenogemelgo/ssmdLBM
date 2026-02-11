@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| MULTIC-TS-LBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/MULTIC-TS-LBM                       |
+| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -12,27 +12,11 @@
 Copyright (C) 2023 UDESC Geoenergia Lab
 Authors: Breno Gemelgo (Geoenergia Lab, UDESC)
 
-License
-    This file is part of MULTIC-TS-LBM.
-
-    MULTIC-TS-LBM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 Description
-    Initial conditions kernels
+    Initial condition kernels for jet and droplet setups, density initialization, and equilibrium distribution assignment
 
 Namespace
-    LBM
+    lbm
 
 SourceFiles
     initialConditions.cu
@@ -42,27 +26,10 @@ SourceFiles
 #ifndef INITIALCONDITIONS_CUH
 #define INITIALCONDITIONS_CUH
 
-#include "include/LBMIncludes.cuh"
+#include "LBMIncludes.cuh"
 
-namespace LBM
+namespace lbm
 {
-    __global__ void setFields(LBMFields d)
-    {
-        const label_t x = threadIdx.x + blockIdx.x * blockDim.x;
-        const label_t y = threadIdx.y + blockIdx.y * blockDim.y;
-        const label_t z = threadIdx.z + blockIdx.z * blockDim.z;
-
-        if (x >= mesh::nx || y >= mesh::ny || z >= mesh::nz)
-        {
-            return;
-        }
-
-        const label_t idx3 = device::global3(x, y, z);
-
-        // Non-zero fields
-        d.rho[idx3] = static_cast<scalar_t>(1);
-    }
-
     __global__ void setWaterJet(LBMFields d)
     {
         const label_t x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -113,6 +80,22 @@ namespace LBM
         d.uz[idx3_in] = physics::u_oil;
     }
 
+    __global__ void setInitialDensity(LBMFields d)
+    {
+        const label_t x = threadIdx.x + blockIdx.x * blockDim.x;
+        const label_t y = threadIdx.y + blockIdx.y * blockDim.y;
+        const label_t z = threadIdx.z + blockIdx.z * blockDim.z;
+
+        if (x >= mesh::nx || y >= mesh::ny || z >= mesh::nz)
+        {
+            return;
+        }
+
+        const label_t idx3 = device::global3(x, y, z);
+
+        d.rho[idx3] = static_cast<scalar_t>(1);
+    }
+
     __global__ void setDistros(LBMFields d)
     {
         const label_t x = threadIdx.x + blockIdx.x * blockDim.x;
@@ -131,28 +114,28 @@ namespace LBM
         const scalar_t uz = d.uz[idx3];
 
         const scalar_t uu = static_cast<scalar_t>(1.5) * (ux * ux + uy * uy + uz * uz);
-        device::constexpr_for<0, VelocitySet::Q()>(
+        device::constexpr_for<0, velocitySet::Q()>(
             [&](const auto Q)
             {
-                constexpr scalar_t cx = static_cast<scalar_t>(VelocitySet::cx<Q>());
-                constexpr scalar_t cy = static_cast<scalar_t>(VelocitySet::cy<Q>());
-                constexpr scalar_t cz = static_cast<scalar_t>(VelocitySet::cz<Q>());
+                constexpr scalar_t cx = static_cast<scalar_t>(velocitySet::cx<Q>());
+                constexpr scalar_t cy = static_cast<scalar_t>(velocitySet::cy<Q>());
+                constexpr scalar_t cz = static_cast<scalar_t>(velocitySet::cz<Q>());
 
-                const scalar_t cu = VelocitySet::as2() * (cx * ux + cy * uy + cz * uz);
+                const scalar_t cu = velocitySet::as2() * (cx * ux + cy * uy + cz * uz);
 
-                const scalar_t feq = VelocitySet::f_eq<Q>(d.rho[idx3], uu, cu);
+                const scalar_t feq = velocitySet::f_eq<Q>(d.rho[idx3], uu, cu);
 
                 d.f[Q * size::cells() + idx3] = to_pop(feq);
             });
 
-        device::constexpr_for<0, Phase::VelocitySet::Q()>(
+        device::constexpr_for<0, phase::velocitySet::Q()>(
             [&](const auto Q)
             {
-                // const label_t xx = x + static_cast<label_t>(Phase::VelocitySet::cx<Q>());
-                // const label_t yy = y + static_cast<label_t>(Phase::VelocitySet::cy<Q>());
-                // const label_t zz = z + static_cast<label_t>(Phase::VelocitySet::cz<Q>());
+                // const label_t xx = x + static_cast<label_t>(phase::velocitySet::cx<Q>());
+                // const label_t yy = y + static_cast<label_t>(phase::velocitySet::cy<Q>());
+                // const label_t zz = z + static_cast<label_t>(phase::velocitySet::cz<Q>());
 
-                d.g[device::global4(x, y, z, Q)] = Phase::VelocitySet::g_eq<Q>(d.phi[idx3], ux, uy, uz);
+                d.g[device::global4(x, y, z, Q)] = phase::velocitySet::g_eq<Q>(d.phi[idx3], ux, uy, uz);
             });
     }
 }

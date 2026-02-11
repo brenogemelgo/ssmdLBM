@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| MULTIC-TS-LBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/MULTIC-TS-LBM                       |
+| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -12,27 +12,11 @@
 Copyright (C) 2023 UDESC Geoenergia Lab
 Authors: Breno Gemelgo (Geoenergia Lab, UDESC)
 
-License
-    This file is part of MULTIC-TS-LBM.
-
-    MULTIC-TS-LBM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 Description
-     CUDA kernel for Lattice Boltzmann Method routines
+    Core LBM kernels for moment computation, collision–streaming, forcing, and coupled phase-field transport
 
 Namespace
-    LBM
+    lbm
 
 SourceFiles
     lbm.cuh
@@ -42,9 +26,9 @@ SourceFiles
 #ifndef LBM_CUH
 #define LBM_CUH
 
-#include "include/LBMIncludes.cuh"
+#include "LBMIncludes.cuh"
 
-namespace LBM
+namespace lbm
 {
     __global__ void computeMoments(LBMFields d)
     {
@@ -60,9 +44,9 @@ namespace LBM
         const label_t idx3 = device::global3(x, y, z);
 
         scalar_t rho = static_cast<scalar_t>(0);
-        scalar_t pop[VelocitySet::Q()];
+        scalar_t pop[velocitySet::Q()];
 
-        device::constexpr_for<0, VelocitySet::Q()>(
+        device::constexpr_for<0, velocitySet::Q()>(
             [&](const auto Q)
             {
                 const scalar_t fq = from_pop(d.f[Q * size::cells() + idx3]);
@@ -73,9 +57,9 @@ namespace LBM
         rho += static_cast<scalar_t>(1);
         d.rho[idx3] = rho;
 
-        const scalar_t ffx = d.ffx[idx3];
-        const scalar_t ffy = d.ffy[idx3];
-        const scalar_t ffz = d.ffz[idx3];
+        const scalar_t fsx = d.fsx[idx3];
+        const scalar_t fsy = d.fsy[idx3];
+        const scalar_t fsz = d.fsz[idx3];
 
         const scalar_t invRho = static_cast<scalar_t>(1) / rho;
 
@@ -83,22 +67,22 @@ namespace LBM
         scalar_t uy = static_cast<scalar_t>(0);
         scalar_t uz = static_cast<scalar_t>(0);
 
-        if constexpr (VelocitySet::Q() == 19)
+        if constexpr (velocitySet::Q() == 19)
         {
             ux = invRho * (pop[1] - pop[2] + pop[7] - pop[8] + pop[9] - pop[10] + pop[13] - pop[14] + pop[15] - pop[16]);
             uy = invRho * (pop[3] - pop[4] + pop[7] - pop[8] + pop[11] - pop[12] + pop[14] - pop[13] + pop[17] - pop[18]);
             uz = invRho * (pop[5] - pop[6] + pop[9] - pop[10] + pop[11] - pop[12] + pop[16] - pop[15] + pop[18] - pop[17]);
         }
-        else if constexpr (VelocitySet::Q() == 27)
+        else if constexpr (velocitySet::Q() == 27)
         {
             ux = invRho * (pop[1] - pop[2] + pop[7] - pop[8] + pop[9] - pop[10] + pop[13] - pop[14] + pop[15] - pop[16] + pop[19] - pop[20] + pop[21] - pop[22] + pop[23] - pop[24] + pop[26] - pop[25]);
             uy = invRho * (pop[3] - pop[4] + pop[7] - pop[8] + pop[11] - pop[12] + pop[14] - pop[13] + pop[17] - pop[18] + pop[19] - pop[20] + pop[21] - pop[22] + pop[24] - pop[23] + pop[25] - pop[26]);
             uz = invRho * (pop[5] - pop[6] + pop[9] - pop[10] + pop[11] - pop[12] + pop[16] - pop[15] + pop[18] - pop[17] + pop[19] - pop[20] + pop[22] - pop[21] + pop[23] - pop[24] + pop[25] - pop[26]);
         }
 
-        ux += ffx * static_cast<scalar_t>(0.5) * invRho;
-        uy += ffy * static_cast<scalar_t>(0.5) * invRho;
-        uz += ffz * static_cast<scalar_t>(0.5) * invRho;
+        ux += fsx * static_cast<scalar_t>(0.5) * invRho;
+        uy += fsy * static_cast<scalar_t>(0.5) * invRho;
+        uz += fsz * static_cast<scalar_t>(0.5) * invRho;
 
         d.ux[idx3] = ux;
         d.uy[idx3] = uy;
@@ -109,17 +93,17 @@ namespace LBM
 
         const scalar_t uu = static_cast<scalar_t>(1.5) * (ux * ux + uy * uy + uz * uz);
 
-        device::constexpr_for<0, VelocitySet::Q()>(
+        device::constexpr_for<0, velocitySet::Q()>(
             [&](const auto Q)
             {
-                constexpr scalar_t cx = static_cast<scalar_t>(VelocitySet::cx<Q>());
-                constexpr scalar_t cy = static_cast<scalar_t>(VelocitySet::cy<Q>());
-                constexpr scalar_t cz = static_cast<scalar_t>(VelocitySet::cz<Q>());
+                constexpr scalar_t cx = static_cast<scalar_t>(velocitySet::cx<Q>());
+                constexpr scalar_t cy = static_cast<scalar_t>(velocitySet::cy<Q>());
+                constexpr scalar_t cz = static_cast<scalar_t>(velocitySet::cz<Q>());
 
-                const scalar_t cu = VelocitySet::as2() * (cx * ux + cy * uy + cz * uz);
+                const scalar_t cu = velocitySet::as2() * (cx * ux + cy * uy + cz * uz);
 
-                const scalar_t feq = VelocitySet::f_eq<Q>(rho, uu, cu);
-                const scalar_t force = VelocitySet::force<Q>(cu, ux, uy, uz, ffx, ffy, ffz);
+                const scalar_t feq = velocitySet::f_eq<Q>(rho, uu, cu);
+                const scalar_t force = velocitySet::force<Q>(cu, ux, uy, uz, fsx, fsy, fsz);
                 const scalar_t fneq = pop[Q] - feq + force;
 
                 pxx += fneq * cx * cx;
@@ -129,6 +113,11 @@ namespace LBM
                 pxz += fneq * cx * cz;
                 pyz += fneq * cy * cz;
             });
+
+        const scalar_t trace = pxx + pyy + pzz;
+        pxx -= velocitySet::cs2() * trace;
+        pyy -= velocitySet::cs2() * trace;
+        pzz -= velocitySet::cs2() * trace;
 
         d.pxx[idx3] = pxx;
         d.pyy[idx3] = pyy;
@@ -161,61 +150,54 @@ namespace LBM
         const scalar_t pxy = d.pxy[idx3];
         const scalar_t pxz = d.pxz[idx3];
         const scalar_t pyz = d.pyz[idx3];
-        const scalar_t ffx = d.ffx[idx3];
-        const scalar_t ffy = d.ffy[idx3];
-        const scalar_t ffz = d.ffz[idx3];
+        const scalar_t fsx = d.fsx[idx3];
+        const scalar_t fsy = d.fsy[idx3];
+        const scalar_t fsz = d.fsz[idx3];
 
         scalar_t omco;
+        const scalar_t phi = d.phi[idx3];
         {
-            const scalar_t phi = d.phi[idx3];
             const scalar_t nu = math::fma(phi, (relaxation::visc_oil() - relaxation::visc_water()), relaxation::visc_water());
-            const scalar_t omega = static_cast<scalar_t>(1) / (static_cast<scalar_t>(0.5) + VelocitySet::as2() * nu);
+            const scalar_t omega = static_cast<scalar_t>(1) / (static_cast<scalar_t>(0.5) + velocitySet::as2() * nu);
             omco = static_cast<scalar_t>(1) - omega;
         }
 
         const scalar_t uu = static_cast<scalar_t>(1.5) * (ux * ux + uy * uy + uz * uz);
 
-        device::constexpr_for<0, VelocitySet::Q()>(
+        device::constexpr_for<0, velocitySet::Q()>(
             [&](const auto Q)
             {
-                constexpr scalar_t cx = static_cast<scalar_t>(VelocitySet::cx<Q>());
-                constexpr scalar_t cy = static_cast<scalar_t>(VelocitySet::cy<Q>());
-                constexpr scalar_t cz = static_cast<scalar_t>(VelocitySet::cz<Q>());
+                constexpr scalar_t cx = static_cast<scalar_t>(velocitySet::cx<Q>());
+                constexpr scalar_t cy = static_cast<scalar_t>(velocitySet::cy<Q>());
+                constexpr scalar_t cz = static_cast<scalar_t>(velocitySet::cz<Q>());
 
-                const scalar_t cu = VelocitySet::as2() * (cx * ux + cy * uy + cz * uz);
+                const scalar_t cu = velocitySet::as2() * (cx * ux + cy * uy + cz * uz);
 
-                const scalar_t feq = VelocitySet::f_eq<Q>(rho, uu, cu);
-                const scalar_t force = VelocitySet::force<Q>(cu, ux, uy, uz, ffx, ffy, ffz);
-                const scalar_t fneq = VelocitySet::f_neq<Q>(pxx, pyy, pzz, pxy, pxz, pyz, ux, uy, uz);
+                const scalar_t feq = velocitySet::f_eq<Q>(rho, uu, cu);
+                const scalar_t force = velocitySet::force<Q>(cu, ux, uy, uz, fsx, fsy, fsz);
+                const scalar_t fneq = velocitySet::f_neq<Q>(pxx, pyy, pzz, pxy, pxz, pyz, ux, uy, uz);
 
-                label_t xx = x + static_cast<label_t>(VelocitySet::cx<Q>());
-                label_t yy = y + static_cast<label_t>(VelocitySet::cy<Q>());
-                label_t zz = z + static_cast<label_t>(VelocitySet::cz<Q>());
-
-                // Periodic wrapping
-                xx = device::wrapX(xx);
+                label_t xx = x + static_cast<label_t>(velocitySet::cx<Q>());
+                label_t yy = y + static_cast<label_t>(velocitySet::cy<Q>());
+                label_t zz = z + static_cast<label_t>(velocitySet::cz<Q>());
 
                 d.f[device::global4(xx, yy, zz, Q)] = to_pop(feq + omco * fneq + force);
             });
 
-        const scalar_t phi = d.phi[idx3];
         const scalar_t normx = d.normx[idx3];
         const scalar_t normy = d.normy[idx3];
         const scalar_t normz = d.normz[idx3];
         const scalar_t sharp = physics::gamma * phi * (static_cast<scalar_t>(1) - phi);
 
-        device::constexpr_for<0, Phase::VelocitySet::Q()>(
+        device::constexpr_for<0, phase::velocitySet::Q()>(
             [&](const auto Q)
             {
-                const scalar_t geq = Phase::VelocitySet::g_eq<Q>(phi, ux, uy, uz);
-                const scalar_t hi = Phase::VelocitySet::anti_diffusion<Q>(sharp, normx, normy, normz);
+                const scalar_t geq = phase::velocitySet::g_eq<Q>(phi, ux, uy, uz);
+                const scalar_t hi = phase::velocitySet::anti_diffusion<Q>(sharp, normx, normy, normz);
 
-                label_t xx = x + static_cast<label_t>(Phase::VelocitySet::cx<Q>());
-                label_t yy = y + static_cast<label_t>(Phase::VelocitySet::cy<Q>());
-                label_t zz = z + static_cast<label_t>(Phase::VelocitySet::cz<Q>());
-
-                // Periodic wrapping
-                xx = device::wrapX(xx);
+                label_t xx = x + static_cast<label_t>(phase::velocitySet::cx<Q>());
+                label_t yy = y + static_cast<label_t>(phase::velocitySet::cy<Q>());
+                label_t zz = z + static_cast<label_t>(phase::velocitySet::cz<Q>());
 
                 d.g[device::global4(xx, yy, zz, Q)] = geq + hi;
             });
@@ -239,6 +221,11 @@ namespace LBM
     __global__ void callOutflowZ(LBMFields d)
     {
         BoundaryConditions::applyOutflowZ(d);
+    }
+
+    __global__ void callPeriodicX(LBMFields d)
+    {
+        BoundaryConditions::periodicX(d);
     }
 }
 

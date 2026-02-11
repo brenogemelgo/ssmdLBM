@@ -66,10 +66,12 @@ nvcc -O3 --restrict \
      -I"${SRC_DIR}" \
      -std=c++20 "${SRC_DIR}/main.cu" \
      -D${VS_MACRO} \
-     -DENABLE_FP16=1 \
+     -DENABLE_FP16=0 \
      -DBENCHMARK=0 \
      -DTIME_AVERAGE=0 \
      -DREYNOLDS_MOMENTS=0 \
+     -DVORTICITY_FIELDS=0 \
+     -DPASSIVE_SCALAR=0 \
      -o "${EXECUTABLE}"
 
 echo "Compilation completed successfully: ${EXECUTABLE}"

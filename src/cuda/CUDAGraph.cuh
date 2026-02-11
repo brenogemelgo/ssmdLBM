@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| MULTIC-TS-LBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/MULTIC-TS-LBM                       |
+| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -12,24 +12,8 @@
 Copyright (C) 2023 UDESC Geoenergia Lab
 Authors: Breno Gemelgo (Geoenergia Lab, UDESC)
 
-License
-    This file is part of MULTIC-TS-LBM.
-
-    MULTIC-TS-LBM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 Description
-    CUDA Graph implementation
+    CUDA Graph capture of the core phase-field and hydrodynamic LBM kernel sequence
 
 Namespace
     graph
@@ -43,7 +27,7 @@ SourceFiles
 #define CUDAGRAPH_CUH
 
 #include "phaseField.cuh"
-#include "include/LBMIncludes.cuh"
+#include "LBMIncludes.cuh"
 
 namespace graph
 {
@@ -57,13 +41,13 @@ namespace graph
         checkCudaErrorsOutline(cudaStreamBeginCapture(queue, cudaStreamCaptureModeGlobal));
 
         // Phase field
-        Phase::computePhase<<<grid, block, dynamic, queue>>>(fields);
-        Phase::computeNormals<<<grid, block, dynamic, queue>>>(fields);
-        Phase::computeForces<<<grid, block, dynamic, queue>>>(fields);
+        phase::computePhase<<<grid, block, dynamic, queue>>>(fields);
+        phase::computeNormals<<<grid, block, dynamic, queue>>>(fields);
+        phase::computeForces<<<grid, block, dynamic, queue>>>(fields);
 
         // Hydrodynamics
-        LBM::computeMoments<<<grid, block, dynamic, queue>>>(fields);
-        LBM::streamCollide<<<grid, block, dynamic, queue>>>(fields);
+        lbm::computeMoments<<<grid, block, dynamic, queue>>>(fields);
+        lbm::streamCollide<<<grid, block, dynamic, queue>>>(fields);
 
         // NOTE: We intentionally DO NOT include boundary conditions or
         // derived fields here, because they depend on STEP and/or other

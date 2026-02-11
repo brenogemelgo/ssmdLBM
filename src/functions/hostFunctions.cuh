@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| MULTIC-TS-LBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/MULTIC-TS-LBM                       |
+| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -12,24 +12,8 @@
 Copyright (C) 2023 UDESC Geoenergia Lab
 Authors: Breno Gemelgo (Geoenergia Lab, UDESC)
 
-License
-    This file is part of MULTIC-TS-LBM.
-
-    MULTIC-TS-LBM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 Description
-    Host I/O and utility functions
+   Host-side I/O, diagnostics, and utility routines for simulation setup and data output
 
 Namespace
     host
@@ -80,10 +64,10 @@ namespace host
             file << "---------------------------- SIMULATION METADATA ----------------------------\n"
                  << "ID:                 " << SIM_ID << '\n'
                  << "Velocity set:       " << VELOCITY_SET << '\n'
-                 << "Water velocity: " << physics::u_water << '\n'
-                 << "Oil velocity: " << physics::u_oil << '\n'
-                 << "Water Reynolds:    " << physics::reynolds_water << '\n'
-                 << "Oil Reynolds:    " << physics::reynolds_oil << '\n'
+                 << "Water velocity:     " << physics::u_water << '\n'
+                 << "Oil velocity:       " << physics::u_oil << '\n'
+                 << "Water Reynolds:     " << physics::reynolds_water << '\n'
+                 << "Oil Reynolds:       " << physics::reynolds_oil << '\n'
                  << "Weber number:       " << physics::weber << "\n\n"
                  << "Domain size:        NX=" << mesh::nx << ", NY=" << mesh::ny << ", NZ=" << mesh::nz << '\n'
                  << "Water diameter:     D=" << mesh::diam_water << '\n'
@@ -194,100 +178,19 @@ namespace host
         return (a + b - 1u) / b;
     }
 
-    __host__ [[gnu::cold]] static inline void allocateFields()
+    __host__ [[nodiscard]] static inline constexpr size_t bytesScalar() noexcept
     {
-        constexpr size_t NCELLS = static_cast<size_t>(mesh::nx) * static_cast<size_t>(mesh::ny) * static_cast<size_t>(mesh::nz);
-        constexpr size_t SIZE = NCELLS * sizeof(scalar_t);
-        constexpr size_t F_DIST_SIZE = NCELLS * static_cast<size_t>(LBM::VelocitySet::Q()) * sizeof(pop_t);
-        constexpr size_t G_DIST_SIZE = NCELLS * static_cast<size_t>(Phase::VelocitySet::Q()) * sizeof(scalar_t);
+        return static_cast<size_t>(size::cells()) * sizeof(scalar_t);
+    }
 
-        static_assert(NCELLS > 0, "Empty grid?");
-        static_assert(SIZE / sizeof(scalar_t) == NCELLS, "SIZE overflow");
-        static_assert(F_DIST_SIZE / sizeof(pop_t) == NCELLS * size_t(LBM::VelocitySet::Q()), "F_DIST_SIZE overflow");
-        static_assert(G_DIST_SIZE / sizeof(scalar_t) == NCELLS * size_t(Phase::VelocitySet::Q()), "G_DIST_SIZE overflow");
+    __host__ [[nodiscard]] static inline constexpr size_t bytesF() noexcept
+    {
+        return static_cast<size_t>(size::cells()) * static_cast<size_t>(lbm::velocitySet::Q()) * sizeof(pop_t);
+    }
 
-        checkCudaErrors(cudaMalloc(&fields.rho, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.ux, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.uy, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.uz, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.pxx, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.pyy, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.pzz, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.pxy, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.pxz, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.pyz, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.phi, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.normx, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.normy, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.normz, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.ind, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.ffx, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.ffy, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.ffz, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.f, F_DIST_SIZE));
-        checkCudaErrors(cudaMalloc(&fields.g, G_DIST_SIZE));
-
-#if TIME_AVERAGE
-
-        checkCudaErrors(cudaMalloc(&fields.avg_phi, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.avg_ux, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.avg_uy, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.avg_uz, SIZE));
-
-#endif
-
-#if REYNOLDS_MOMENTS
-
-        checkCudaErrors(cudaMalloc(&fields.avg_uxux, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.avg_uyuy, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.avg_uzuz, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.avg_uxuy, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.avg_uxuz, SIZE));
-        checkCudaErrors(cudaMalloc(&fields.avg_uyuz, SIZE));
-
-#endif
-
-        checkCudaErrors(cudaMemset(fields.ux, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.uy, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.uz, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.pxx, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.pyy, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.pzz, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.pxy, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.pxz, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.pyz, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.phi, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.normx, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.normy, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.normz, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.ind, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.ffx, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.ffy, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.ffz, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.f, 0, F_DIST_SIZE));
-        checkCudaErrors(cudaMemset(fields.g, 0, G_DIST_SIZE));
-
-#if TIME_AVERAGE
-
-        checkCudaErrors(cudaMemset(fields.avg_phi, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.avg_ux, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.avg_uy, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.avg_uz, 0, SIZE));
-
-#endif
-
-#if REYNOLDS_MOMENTS
-
-        checkCudaErrors(cudaMemset(fields.avg_uxux, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.avg_uyuy, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.avg_uzuz, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.avg_uxuy, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.avg_uxuz, 0, SIZE));
-        checkCudaErrors(cudaMemset(fields.avg_uyuz, 0, SIZE));
-
-#endif
-
-        getLastCudaErrorOutline("allocateFields: post-initialization");
+    __host__ [[nodiscard]] static inline constexpr size_t bytesG() noexcept
+    {
+        return static_cast<size_t>(size::cells()) * static_cast<size_t>(phase::velocitySet::Q()) * sizeof(scalar_t);
     }
 }
 

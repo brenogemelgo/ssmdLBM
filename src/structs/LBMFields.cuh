@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| MULTIC-TS-LBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/MULTIC-TS-LBM                       |
+| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -12,24 +12,8 @@
 Copyright (C) 2023 UDESC Geoenergia Lab
 Authors: Breno Gemelgo (Geoenergia Lab, UDESC)
 
-License
-    This file is part of MULTIC-TS-LBM.
-
-    MULTIC-TS-LBM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 Description
-    LBMFields struct declaration
+    Unified device field container for primary, phase-field, and optional derived LBM quantities
 
 SourceFiles
     LBMFields.cuh
@@ -57,9 +41,9 @@ struct LBMFields
     scalar_t *normy;
     scalar_t *normz;
     scalar_t *ind;
-    scalar_t *ffx;
-    scalar_t *ffy;
-    scalar_t *ffz;
+    scalar_t *fsx;
+    scalar_t *fsy;
+    scalar_t *fsz;
 
     pop_t *f;
     scalar_t *g;
@@ -81,6 +65,21 @@ struct LBMFields
     scalar_t *avg_uxuy; // xy
     scalar_t *avg_uxuz; // xz
     scalar_t *avg_uyuz; // yz
+
+#endif
+
+#if VORTICITY_FIELDS
+
+    scalar_t *vort_x;
+    scalar_t *vort_y;
+    scalar_t *vort_z;
+    scalar_t *vort_mag;
+
+#endif
+
+#if PASSIVE_SCALAR
+
+    scalar_t *c;
 
 #endif
 };

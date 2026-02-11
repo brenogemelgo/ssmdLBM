@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| MULTIC-TS-LBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/MULTIC-TS-LBM                       |
+| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -12,24 +12,8 @@
 Copyright (C) 2023 UDESC Geoenergia Lab
 Authors: Breno Gemelgo (Geoenergia Lab, UDESC)
 
-License
-    This file is part of MULTIC-TS-LBM.
-
-    MULTIC-TS-LBM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 Description
-    CUDA utility functions and definitions
+    CUDA utilities for block-level tiling, precision control, and error handling
 
 Namespace
     block
@@ -54,6 +38,7 @@ SourceFiles
 #include <chrono>
 #include <stdexcept>
 #include <cmath>
+#include <cstring>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -69,9 +54,9 @@ SourceFiles
 
 namespace block
 {
-    static constexpr unsigned nx = 32u;
-    static constexpr unsigned ny = 4u;
-    static constexpr unsigned nz = 4u;
+    static constexpr unsigned nx = 32;
+    static constexpr unsigned ny = 4;
+    static constexpr unsigned nz = 4;
 
     static constexpr int pad = 1;
     static constexpr int tile_nx = static_cast<int>(nx) + 2 * pad;
@@ -79,7 +64,7 @@ namespace block
     static constexpr int tile_nz = static_cast<int>(nz) + 2 * pad;
 }
 
-using label_t = uint64_t;
+using label_t = uint32_t;
 using scalar_t = float;
 
 #if ENABLE_FP16
@@ -126,8 +111,7 @@ __host__ static void __checkCudaErrorsOutline(
 {
     if (err != cudaSuccess)
     {
-        fprintf(
-            stderr, "CUDA error at %s(%d) \"%s\": [%d] %s.\n", file, line, func, (int)err, cudaGetErrorString(err));
+        fprintf(stderr, "CUDA error at %s(%d) \"%s\": [%d] %s.\n", file, line, func, static_cast<int>(err), cudaGetErrorString(err));
         fflush(stderr);
         std::abort();
     }
@@ -141,8 +125,7 @@ __host__ static void __getLastCudaErrorOutline(
     cudaError_t err = cudaGetLastError();
     if (err != cudaSuccess)
     {
-        fprintf(stderr, "CUDA error at %s(%d): [%d] %s. Context: %s\n",
-                file, line, (int)err, cudaGetErrorString(err), errorMessage);
+        fprintf(stderr, "CUDA error at %s(%d): [%d] %s. Context: %s\n", file, line, static_cast<int>(err), cudaGetErrorString(err), errorMessage);
         fflush(stderr);
         std::abort();
     }
@@ -156,8 +139,7 @@ __host__ static inline void __checkCudaErrors(
 {
     if (err != cudaSuccess)
     {
-        fprintf(stderr, "CUDA error at %s(%d) \"%s\": [%d] %s.\n",
-                file, line, func, (int)err, cudaGetErrorString(err));
+        fprintf(stderr, "CUDA error at %s(%d) \"%s\": [%d] %s.\n", file, line, func, static_cast<int>(err), cudaGetErrorString(err));
         fflush(stderr);
         std::abort();
     }

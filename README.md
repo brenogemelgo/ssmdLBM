@@ -1,6 +1,8 @@
-# SSMD-LBM
+# phaseFieldLBM
 
-**SSMD-LBM** is a **GPU-accelerated**, thread-safe Lattice Boltzmann simulator for SSMD. Implemented in CUDA, it supports **D3Q19/D3Q27** for hydrodynamics and **D3Q7** for phase field evolution, capturing interface dynamics and surface tension. Available cases: **droplet** and **jet**.
+**phaseFieldLBM** is a **GPU-accelerated**, lattice Boltzmann simulator for multicomponent flows based on a **conservative Allen–Cahn** phase-field formulation. 
+Implemented in CUDA, it supports **D3Q19/D3Q27** for hydrodynamics and **D3Q7** for phase field evolution, enabling accurate interface dynamics and surface tension modeling.
+Available cases: **jet** and **droplet**.
 
 ---
 
@@ -16,9 +18,10 @@
 ## 🚀 Run
 
 ```bash
-./pipeline.sh <velocity_set> <id>
+./pipeline.sh <flow_case> <velocity_set> <id>
 ```
 
+* `flow_case`: `JET` | `DROPLET`
 * `velocity_set`: `D3Q19` | `D3Q27`
 * `id`: simulation ID (e.g., `000`)
 
@@ -29,18 +32,19 @@ Pipeline: compile → simulate → post-process
 ## ⚡ Benchmark
 
 Performance is reported in **MLUPS** (Million Lattice Updates Per Second).  
-Each GPU entry shows the average across multiple runs.
+All benchmarks are performed in **FP32 precision**.  
 
-| GPU            | D3Q19 (MLUPS) | D3Q27 (MLUPS) |
-|----------------|---------------|---------------|
-| RTX 3050 (4GB) | --       | –             |
-| RTX 4090 (24GB)| –             | –             |
-| A100 (40GB)    | –             | –             |
+| GPU             | D3Q19 (MLUPS) | D3Q27 (MLUPS) |
+|-----------------|---------------|---------------|
+| RTX 3050 (4GB)  | 440           | 377           |
+| RTX 4090 (24GB) | –             | –             |
+| A100 (40GB)     | –             | –             |
 
 *Important considerations:*  
-- **D3Q19** uses 2nd-order equilibrium/non-equilibrium expansion.  
-- **D3Q27** uses 3rd-order equilibrium/non-equilibrium expansion.  
-- These methodological differences contribute to the observed performance gap, beyond the natural cost of upgrading from **19** to **27** velocity directions.
+- **D3Q19** uses 2nd-order equilibrium/non-equilibrium expansion
+- **D3Q27** uses 3rd-order equilibrium/non-equilibrium expansion
+- The current implementation is **not yet fully optimized**, with several **non-coalesced memory access patterns** that are planned to be improved in future revisions
+- These methodological differences contribute to the observed performance gap, beyond the natural cost of upgrading from **19** to **27** velocity directions
 
 ---
 

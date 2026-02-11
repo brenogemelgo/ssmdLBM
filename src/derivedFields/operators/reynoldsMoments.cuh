@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| MULTIC-TS-LBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/MULTIC-TS-LBM                       |
+| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -12,27 +12,13 @@
 Copyright (C) 2023 UDESC Geoenergia Lab
 Authors: Breno Gemelgo (Geoenergia Lab, UDESC)
 
-License
-    This file is part of MULTIC-TS-LBM.
-
-    MULTIC-TS-LBM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 Description
-    Reynolds moments kernels
+    Computation of Reynolds stress moments via incremental time averaging
 
 Namespace
-    LBM
+    lbm
+    derived
+    reynolds
 
 SourceFiles
     reynoldsMoments.cuh
@@ -42,11 +28,11 @@ SourceFiles
 #ifndef REYNOLDSMOMENTS_CUH
 #define REYNOLDSMOMENTS_CUH
 
-#include "functions/ioFields.cuh"
+#include "fileIO/fields.cuh"
 
 #if REYNOLDS_MOMENTS
 
-namespace LBM
+namespace lbm
 {
     __global__ void reynoldsMomentsAverage(
         LBMFields d,
@@ -61,37 +47,58 @@ namespace LBM
             return;
         }
 
+        if (d.avg_uxux == nullptr && d.avg_uyuy == nullptr && d.avg_uzuz == nullptr && d.avg_uxuy == nullptr && d.avg_uxuz == nullptr && d.avg_uyuz == nullptr)
+        {
+            return;
+        }
+
         const label_t idx3 = device::global3(x, y, z);
 
         const scalar_t ux = d.ux[idx3];
         const scalar_t uy = d.uy[idx3];
         const scalar_t uz = d.uz[idx3];
 
-        const scalar_t uxux = ux * ux;
-        const scalar_t uyuy = uy * uy;
-        const scalar_t uzuz = uz * uz;
-
-        const scalar_t uxuy = ux * uy;
-        const scalar_t uxuz = ux * uz;
-        const scalar_t uyuz = uy * uz;
-
         auto update = [t] __device__(scalar_t oldv, scalar_t instv)
         {
             return oldv + (instv - oldv) / static_cast<scalar_t>(t);
         };
 
-        d.avg_uxux[idx3] = update(d.avg_uxux[idx3], uxux);
-        d.avg_uyuy[idx3] = update(d.avg_uyuy[idx3], uyuy);
-        d.avg_uzuz[idx3] = update(d.avg_uzuz[idx3], uzuz);
-        d.avg_uxuy[idx3] = update(d.avg_uxuy[idx3], uxuy);
-        d.avg_uxuz[idx3] = update(d.avg_uxuz[idx3], uxuz);
-        d.avg_uyuz[idx3] = update(d.avg_uyuz[idx3], uyuz);
+        if (d.avg_uxux)
+        {
+            const scalar_t uxux = ux * ux;
+            d.avg_uxux[idx3] = update(d.avg_uxux[idx3], uxux);
+        }
+        if (d.avg_uyuy)
+        {
+            const scalar_t uyuy = uy * uy;
+            d.avg_uyuy[idx3] = update(d.avg_uyuy[idx3], uyuy);
+        }
+        if (d.avg_uzuz)
+        {
+            const scalar_t uzuz = uz * uz;
+            d.avg_uzuz[idx3] = update(d.avg_uzuz[idx3], uzuz);
+        }
+        if (d.avg_uxuy)
+        {
+            const scalar_t uxuy = ux * uy;
+            d.avg_uxuy[idx3] = update(d.avg_uxuy[idx3], uxuy);
+        }
+        if (d.avg_uxuz)
+        {
+            const scalar_t uxuz = ux * uz;
+            d.avg_uxuz[idx3] = update(d.avg_uxuz[idx3], uxuz);
+        }
+        if (d.avg_uyuz)
+        {
+            const scalar_t uyuz = uy * uz;
+            d.avg_uyuz[idx3] = update(d.avg_uyuz[idx3], uyuz);
+        }
     }
 }
 
-namespace Derived
+namespace derived
 {
-    namespace Reynolds
+    namespace reynolds
     {
         constexpr std::array<host::FieldConfig, 6> fields{{
             {host::FieldID::Avg_uxux, "avg_uxux", host::FieldDumpShape::Grid3D, true},
@@ -108,21 +115,41 @@ namespace Derived
             LBMFields d,
             const label_t t) noexcept
         {
-#if REYNOLDS_MOMENTS
-            LBM::reynoldsMomentsAverage<<<grid, block, dynamic, queue>>>(d, t + 1);
-#endif
+            lbm::reynoldsMomentsAverage<<<grid, block, dynamic, queue>>>(d, t + 1);
         }
 
-        __host__ static inline void free(LBMFields &d)
+        __host__ static inline void free(LBMFields &d) noexcept
         {
-#if REYNOLDS_MOMENTS
-            cudaFree(d.avg_uxux);
-            cudaFree(d.avg_uyuy);
-            cudaFree(d.avg_uzuz);
-            cudaFree(d.avg_uxuy);
-            cudaFree(d.avg_uxuz);
-            cudaFree(d.avg_uyuz);
-#endif
+            if (d.avg_uxux)
+            {
+                cudaFree(d.avg_uxux);
+                d.avg_uxux = nullptr;
+            }
+            if (d.avg_uyuy)
+            {
+                cudaFree(d.avg_uyuy);
+                d.avg_uyuy = nullptr;
+            }
+            if (d.avg_uzuz)
+            {
+                cudaFree(d.avg_uzuz);
+                d.avg_uzuz = nullptr;
+            }
+            if (d.avg_uxuy)
+            {
+                cudaFree(d.avg_uxuy);
+                d.avg_uxuy = nullptr;
+            }
+            if (d.avg_uxuz)
+            {
+                cudaFree(d.avg_uxuz);
+                d.avg_uxuz = nullptr;
+            }
+            if (d.avg_uyuz)
+            {
+                cudaFree(d.avg_uyuz);
+                d.avg_uyuz = nullptr;
+            }
         }
     }
 }

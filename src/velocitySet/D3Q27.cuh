@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| MULTIC-TS-LBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/MULTIC-TS-LBM                       |
+| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -12,24 +12,8 @@
 Copyright (C) 2023 UDESC Geoenergia Lab
 Authors: Breno Gemelgo (Geoenergia Lab, UDESC)
 
-License
-    This file is part of MULTIC-TS-LBM.
-
-    MULTIC-TS-LBM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 Description
-    D3Q27 velocity set class declaration
+    D3Q27 velocity set with third-order equilibrium and non-equilibrium moments plus forcing
 
 SourceFiles
     D3Q27.cuh
@@ -39,52 +23,52 @@ SourceFiles
 #ifndef D3Q27_CUH
 #define D3Q27_CUH
 
-#include "velocitySet.cuh"
+#include "VelocitySet.cuh"
 
-namespace LBM
+namespace lbm
 {
-    class D3Q27 : private velocitySet
+    class D3Q27 : private VelocitySet
     {
     public:
-        __host__ __device__ [[nodiscard]] inline consteval D3Q27(){};
+        __device__ __host__ [[nodiscard]] inline consteval D3Q27(){};
 
-        __host__ __device__ [[nodiscard]] static inline consteval label_t Q() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval label_t Q() noexcept
         {
             return static_cast<label_t>(Q_);
         }
 
-        __host__ __device__ [[nodiscard]] static inline consteval scalar_t as2() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval scalar_t as2() noexcept
         {
             return static_cast<scalar_t>(3);
         }
 
-        __host__ __device__ [[nodiscard]] static inline consteval scalar_t cs2() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval scalar_t cs2() noexcept
         {
             return static_cast<scalar_t>(static_cast<double>(1) / static_cast<double>(3));
         }
 
-        __host__ __device__ [[nodiscard]] static inline consteval scalar_t w_0() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval scalar_t w_0() noexcept
         {
             return static_cast<scalar_t>(static_cast<double>(8) / static_cast<double>(27));
         }
 
-        __host__ __device__ [[nodiscard]] static inline consteval scalar_t w_1() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval scalar_t w_1() noexcept
         {
             return static_cast<scalar_t>(static_cast<double>(2) / static_cast<double>(27));
         }
 
-        __host__ __device__ [[nodiscard]] static inline consteval scalar_t w_2() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval scalar_t w_2() noexcept
         {
             return static_cast<scalar_t>(static_cast<double>(1) / static_cast<double>(54));
         }
 
-        __host__ __device__ [[nodiscard]] static inline consteval scalar_t w_3() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval scalar_t w_3() noexcept
         {
             return static_cast<scalar_t>(static_cast<double>(1) / static_cast<double>(216));
         }
 
         template <label_t Q>
-        __host__ __device__ [[nodiscard]] static inline consteval scalar_t w() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval scalar_t w() noexcept
         {
             if constexpr (Q == 0)
             {
@@ -105,7 +89,7 @@ namespace LBM
         }
 
         template <label_t Q>
-        __host__ __device__ [[nodiscard]] static inline consteval int cx() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval int cx() noexcept
         {
             if constexpr (Q == 1 || Q == 7 || Q == 9 || Q == 13 || Q == 15 || Q == 19 || Q == 21 || Q == 23 || Q == 26)
             {
@@ -122,7 +106,7 @@ namespace LBM
         }
 
         template <label_t Q>
-        __host__ __device__ [[nodiscard]] static inline consteval int cy() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval int cy() noexcept
         {
             if constexpr (Q == 3 || Q == 7 || Q == 11 || Q == 14 || Q == 17 || Q == 19 || Q == 21 || Q == 24 || Q == 25)
             {
@@ -139,7 +123,7 @@ namespace LBM
         }
 
         template <label_t Q>
-        __host__ __device__ [[nodiscard]] static inline consteval int cz() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval int cz() noexcept
         {
             if constexpr (Q == 5 || Q == 9 || Q == 11 || Q == 16 || Q == 18 || Q == 19 || Q == 22 || Q == 23 || Q == 25)
             {
@@ -155,13 +139,13 @@ namespace LBM
             }
         }
 
-        __host__ __device__ [[nodiscard]] static inline consteval scalar_t oos() noexcept
+        __device__ __host__ [[nodiscard]] static inline consteval scalar_t oos() noexcept
         {
             return static_cast<scalar_t>(static_cast<double>(1) / static_cast<double>(6));
         }
 
         template <label_t Q>
-        __host__ __device__ [[nodiscard]] static inline constexpr scalar_t f_eq(
+        __device__ __host__ [[nodiscard]] static inline constexpr scalar_t f_eq(
             const scalar_t rho,
             const scalar_t uu,
             const scalar_t cu) noexcept
@@ -170,7 +154,7 @@ namespace LBM
         }
 
         template <label_t Q>
-        __host__ __device__ [[nodiscard]] static inline constexpr scalar_t f_neq(
+        __device__ __host__ [[nodiscard]] static inline constexpr scalar_t f_neq(
             const scalar_t pxx,
             const scalar_t pyy,
             const scalar_t pzz,
@@ -201,19 +185,19 @@ namespace LBM
         }
 
         template <label_t Q>
-        __host__ __device__ [[nodiscard]] static inline constexpr scalar_t force(
+        __device__ __host__ [[nodiscard]] static inline constexpr scalar_t force(
             const scalar_t cu,
             const scalar_t ux,
             const scalar_t uy,
             const scalar_t uz,
-            const scalar_t ffx,
-            const scalar_t ffy,
-            const scalar_t ffz) noexcept
+            const scalar_t fsx,
+            const scalar_t fsy,
+            const scalar_t fsz) noexcept
         {
             return static_cast<scalar_t>(0.5) * w<Q>() *
-                   ((as2() * (cx<Q>() - ux) + as2() * cu * cx<Q>()) * ffx +
-                    (as2() * (cy<Q>() - uy) + as2() * cu * cy<Q>()) * ffy +
-                    (as2() * (cz<Q>() - uz) + as2() * cu * cz<Q>()) * ffz);
+                   ((as2() * (cx<Q>() - ux) + as2() * cu * cx<Q>()) * fsx +
+                    (as2() * (cy<Q>() - uy) + as2() * cu * cy<Q>()) * fsy +
+                    (as2() * (cz<Q>() - uz) + as2() * cu * cz<Q>()) * fsz);
         }
 
     private:

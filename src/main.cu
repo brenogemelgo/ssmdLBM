@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| MULTIC-TS-LBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/MULTIC-TS-LBM                       |
+| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -12,24 +12,8 @@
 Copyright (C) 2023 UDESC Geoenergia Lab
 Authors: Breno Gemelgo (Geoenergia Lab, UDESC)
 
-License
-    This file is part of MULTIC-TS-LBM.
-
-    MULTIC-TS-LBM is free software: you can redistribute it and/or modify it
-    under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <https://www.gnu.org/licenses/>.
-
 Description
-    Main program file
+    Main driver orchestrating initialization, CUDA Graph execution, time stepping, boundary handling, and post-processing output
 
 SourceFiles
     main.cu
@@ -37,22 +21,22 @@ SourceFiles
 \*---------------------------------------------------------------------------*/
 
 #include "functions/deviceFunctions.cuh"
+#include "fieldAllocate/FieldAllocate.cuh"
 #include "functions/hostFunctions.cuh"
-#include "functions/ioFields.cuh"
-#include "functions/vtsWriter.cuh"
-#include "functions/vtiWriter.cuh"
+#include "fileIO/fields.cuh"
+#include "postProcess/PostProcess.cuh"
 #include "cuda/CUDAGraph.cuh"
 #include "initialConditions.cu"
-#include "boundaryConditions.cuh"
+#include "BoundaryConditions.cuh"
 #include "phaseField.cuh"
-#include "derivedFields/registry.cuh"
+#include "derivedFields/DerivedFields.cuh"
 #include "lbm.cu"
 
 int main(int argc, char *argv[])
 {
-    if (argc < 3)
+    if (argc < 4)
     {
-        std::cerr << "Error: Usage: " << argv[0] << " <velocity set> <ID>\n";
+        std::cerr << "Error: Usage: " << argv[0] << " <flow case> <velocity set> <ID>\n";
 
         return 1;
     }
@@ -67,8 +51,38 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    // Allocate device fields
-    host::allocateFields();
+    // Device 3D fields
+    static constexpr auto scalar = std::to_array<host::FieldDescription<scalar_t>>({
+        {"rho", &LBMFields::rho, host::bytesScalar(), true},
+        {"ux", &LBMFields::ux, host::bytesScalar(), true},
+        {"uy", &LBMFields::uy, host::bytesScalar(), true},
+        {"uz", &LBMFields::uz, host::bytesScalar(), true},
+        {"pxx", &LBMFields::pxx, host::bytesScalar(), true},
+        {"pyy", &LBMFields::pyy, host::bytesScalar(), true},
+        {"pzz", &LBMFields::pzz, host::bytesScalar(), true},
+        {"pxy", &LBMFields::pxy, host::bytesScalar(), true},
+        {"pxz", &LBMFields::pxz, host::bytesScalar(), true},
+        {"pyz", &LBMFields::pyz, host::bytesScalar(), true},
+        {"phi", &LBMFields::phi, host::bytesScalar(), true},
+        {"normx", &LBMFields::normx, host::bytesScalar(), true},
+        {"normy", &LBMFields::normy, host::bytesScalar(), true},
+        {"normz", &LBMFields::normz, host::bytesScalar(), true},
+        {"ind", &LBMFields::ind, host::bytesScalar(), true},
+        {"fsx", &LBMFields::fsx, host::bytesScalar(), true},
+        {"fsy", &LBMFields::fsy, host::bytesScalar(), true},
+        {"fsz", &LBMFields::fsz, host::bytesScalar(), true},
+    });
+
+    // Device distribution functions
+    static constexpr host::FieldDescription<pop_t> f = {"f", &LBMFields::f, host::bytesF(), true};
+    static constexpr host::FieldDescription<scalar_t> g = {"g", &LBMFields::g, host::bytesG(), true};
+
+    // Allocate all device fields
+    host::FieldAllocate baseOwner(fields, scalar, f, g);
+
+    // Construct derived fields
+    derived::DerivedFields dfields;
+    dfields.allocate(fields);
 
     // Block-wise configuration
     constexpr dim3 block3D(block::nx, block::ny, block::nz);
@@ -76,9 +90,15 @@ int main(int argc, char *argv[])
                           host::divUp(mesh::ny, block3D.y),
                           host::divUp(mesh::nz, block3D.z));
 
+    // Periodic x-direction
+    constexpr dim3 blockX(block::ny, block::nz, 1u);
+    constexpr dim3 gridX(host::divUp(mesh::ny, blockX.x), host::divUp(mesh::nz, blockX.y), 1u);
+
+    // Periodic y-direction
     constexpr dim3 blockY(block::nx, block::nz, 1u);
     constexpr dim3 gridY(host::divUp(mesh::nx, blockY.x), host::divUp(mesh::nz, blockY.y), 1u);
 
+    // Inlet and outlet
     constexpr dim3 blockZ(block::nx, block::ny, 1u);
     constexpr dim3 gridZ(host::divUp(mesh::nx, blockZ.x), host::divUp(mesh::ny, blockZ.y), 1u);
 
@@ -90,10 +110,10 @@ int main(int argc, char *argv[])
     checkCudaErrorsOutline(cudaStreamCreate(&queue));
 
     // Initial conditions
-    LBM::setFields<<<grid3D, block3D, dynamic, queue>>>(fields);
-    LBM::setOilJet<<<grid3D, block3D, dynamic, queue>>>(fields);
-    LBM::setWaterJet<<<grid3D, block3D, dynamic, queue>>>(fields);
-    LBM::setDistros<<<grid3D, block3D, dynamic, queue>>>(fields);
+    lbm::setWaterJet<<<grid3D, block3D, dynamic, queue>>>(fields);
+    lbm::setOilJet<<<grid3D, block3D, dynamic, queue>>>(fields);
+    lbm::setInitialDensity<<<grid3D, block3D, dynamic, queue>>>(fields);
+    lbm::setDistros<<<grid3D, block3D, dynamic, queue>>>(fields);
 
     // Make sure everything is initialized
     checkCudaErrorsOutline(cudaDeviceSynchronize());
@@ -103,20 +123,18 @@ int main(int argc, char *argv[])
     host::printDiagnostics(VELOCITY_SET);
 
 #if !BENCHMARK
-
-    // Initialize thread for asynchronous VTS generation
-    std::vector<std::thread> vtk_threads;
-    vtk_threads.reserve(NSTEPS / MACRO_SAVE + 2);
+    // Post-processing instance
+    host::PostProcess write;
 
     // Base fields (always saved)
-    constexpr std::array<host::FieldConfig, 3> BASE_FIELDS{{
-        {host::FieldID::Rho, "rho", host::FieldDumpShape::Grid3D, true},
+    static constexpr auto BASE_FIELDS = std::to_array<host::FieldConfig>({
         {host::FieldID::Phi, "phi", host::FieldDumpShape::Grid3D, true},
+        {host::FieldID::Uy, "uy", host::FieldDumpShape::Grid3D, true},
         {host::FieldID::Uz, "uz", host::FieldDumpShape::Grid3D, true},
-    }};
+    });
 
     // Derived fields from modules (possibly empty)
-    const auto DERIVED_FIELDS = Derived::makeOutputFields();
+    const auto DERIVED_FIELDS = dfields.makeOutputFields();
 
     // Compose final list in a vector
     std::vector<host::FieldConfig> OUTPUT_FIELDS;
@@ -129,7 +147,6 @@ int main(int argc, char *argv[])
     {
         cfg.includeInPost = (cfg.shape == host::FieldDumpShape::Grid3D);
     }
-
 #endif
 
     // Warmup (optional)
@@ -150,53 +167,30 @@ int main(int argc, char *argv[])
         cudaGraphLaunch(graphExec, queue);
 
         // Inflow/outflow
-        LBM::callWaterInflow<<<gridY, blockY, dynamic, queue>>>(fields);
-        LBM::callOilInflow<<<gridZ, blockZ, dynamic, queue>>>(fields);
-        LBM::callOutflowY<<<gridY, blockY, dynamic, queue>>>(fields);
-        LBM::callOutflowZ<<<gridZ, blockZ, dynamic, queue>>>(fields);
+        lbm::callWaterInflow<<<gridY, blockY, dynamic, queue>>>(fields);
+        lbm::callOilInflow<<<gridZ, blockZ, dynamic, queue>>>(fields);
+        lbm::callOutflowY<<<gridY, blockY, dynamic, queue>>>(fields);
+        lbm::callOutflowZ<<<gridZ, blockZ, dynamic, queue>>>(fields);
+        lbm::callPeriodicX<<<gridX, blockX, dynamic, queue>>>(fields);
+
+        // Ensure debug output is complete before host logic
+        cudaStreamSynchronize(queue);
 
         // Derived fields
-#if TIME_AVERAGE || REYNOLDS_MOMENTS
-        Derived::launchAllDerived<grid3D, block3D, dynamic>(queue, fields, STEP);
-#endif
+        dfields.launch<grid3D, block3D, dynamic>(queue, fields, STEP);
 
 #if !BENCHMARK
-
         const bool isOutputStep = (STEP % MACRO_SAVE == 0) || (STEP == NSTEPS);
 
         if (isOutputStep)
         {
             checkCudaErrors(cudaStreamSynchronize(queue));
-
-            const auto step_copy = STEP;
-
-            host::saveConfiguredFields(OUTPUT_FIELDS, SIM_DIR, step_copy);
-
-            vtk_threads.emplace_back(
-                [step_copy,
-                 fieldsCfg = OUTPUT_FIELDS,
-                 sim_dir = SIM_DIR]
-                {
-                    host::writeImageData(fieldsCfg, sim_dir, step_copy);
-                });
-
             std::cout << "Step " << STEP << ": bins in " << SIM_DIR << "\n";
+            write.bin(OUTPUT_FIELDS, SIM_DIR, STEP, fields);
+            write.vti(OUTPUT_FIELDS, SIM_DIR, STEP);
         }
-
 #endif
     }
-
-#if !BENCHMARK
-
-    for (auto &t : vtk_threads)
-    {
-        if (t.joinable())
-        {
-            t.join();
-        }
-    }
-
-#endif
 
     // Make sure everything is done on the GPU
     cudaStreamSynchronize(queue);
@@ -208,31 +202,6 @@ int main(int argc, char *argv[])
 
     // Destroy stream
     checkCudaErrorsOutline(cudaStreamDestroy(queue));
-
-    // Free device memory
-    cudaFree(fields.f);
-    cudaFree(fields.g);
-    cudaFree(fields.rho);
-    cudaFree(fields.ux);
-    cudaFree(fields.uy);
-    cudaFree(fields.uz);
-    cudaFree(fields.pxx);
-    cudaFree(fields.pyy);
-    cudaFree(fields.pzz);
-    cudaFree(fields.pxy);
-    cudaFree(fields.pxz);
-    cudaFree(fields.pyz);
-    cudaFree(fields.phi);
-    cudaFree(fields.normx);
-    cudaFree(fields.normy);
-    cudaFree(fields.normz);
-    cudaFree(fields.ind);
-    cudaFree(fields.ffx);
-    cudaFree(fields.ffy);
-    cudaFree(fields.ffz);
-
-    // Free derived fields (conditional; only frees what was allocated)
-    Derived::freeAll(fields);
 
     const std::chrono::duration<double> ELAPSED_TIME = END_TIME - START_TIME;
 
