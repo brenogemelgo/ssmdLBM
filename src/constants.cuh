@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| ssmdLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
+| Github: https://github.com/brenogemelgo/ssmdLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -69,13 +69,13 @@ static constexpr int NSTEPS = 0;
 
 namespace mesh
 {
-    static constexpr label_t res = 64;
+    static constexpr label_t res = 128;
     static constexpr label_t nx = res;
     static constexpr label_t ny = res * 2;
     static constexpr label_t nz = res * 2;
 
-    static constexpr int diam_water = 8;
-    static constexpr int diam_oil = 8;
+    static constexpr int diam_water = 13;
+    static constexpr int diam_oil = 13;
 
     static constexpr int radius_water = diam_water / 2;
     static constexpr int radius_oil = diam_oil / 2;

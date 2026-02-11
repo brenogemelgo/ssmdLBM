@@ -1,8 +1,7 @@
-# phaseFieldLBM
+# ssmdLBM
 
-**phaseFieldLBM** is a **GPU-accelerated**, lattice Boltzmann simulator for multicomponent flows based on a **conservative Allen–Cahn** phase-field formulation. 
+**ssmdLBM** is a **GPU-accelerated**, lattice Boltzmann simulator for subsea mechanical dispersion (SSMD) studies based on a **conservative Allen–Cahn** phase-field formulation. 
 Implemented in CUDA, it supports **D3Q19/D3Q27** for hydrodynamics and **D3Q7** for phase field evolution, enabling accurate interface dynamics and surface tension modeling.
-Available cases: **jet** and **droplet**.
 
 ---
 
@@ -18,10 +17,9 @@ Available cases: **jet** and **droplet**.
 ## 🚀 Run
 
 ```bash
-./pipeline.sh <flow_case> <velocity_set> <id>
+./pipeline.sh <velocity_set> <id>
 ```
 
-* `flow_case`: `JET` | `DROPLET`
 * `velocity_set`: `D3Q19` | `D3Q27`
 * `id`: simulation ID (e.g., `000`)
 

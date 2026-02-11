@@ -1,9 +1,9 @@
 /*---------------------------------------------------------------------------*\
 |                                                                             |
-| phaseFieldLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
+| ssmdLBM: CUDA-based multicomponent Lattice Boltzmann Method           |
 | Developed at UDESC - State University of Santa Catarina                     |
 | Website: https://www.udesc.br                                               |
-| Github: https://github.com/brenogemelgo/phaseFieldLBM                       |
+| Github: https://github.com/brenogemelgo/ssmdLBM                       |
 |                                                                             |
 \*---------------------------------------------------------------------------*/
 
@@ -40,7 +40,7 @@ namespace derived
     class DerivedFields
     {
     public:
-        static inline constexpr auto kEnabledNames = std::to_array<const char *>({
+        static constexpr auto kEnabledNames = std::to_array<const char *>({
             // Time averages
             "avg_phi",
             "avg_ux",

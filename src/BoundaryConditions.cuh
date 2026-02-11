@@ -168,6 +168,11 @@ namespace lbm
             const label_t x = threadIdx.x + blockIdx.x * blockDim.x;
             const label_t z = threadIdx.y + blockIdx.y * blockDim.y;
 
+            if (x >= mesh::nx || z >= mesh::nz)
+            {
+                return;
+            }
+
             if (x == 0 || x == mesh::nx - 1 || z == 0 || z == mesh::nz - 1)
             {
                 return;
@@ -216,7 +221,7 @@ namespace lbm
                     }
                 });
 
-            d.g[4 * size::cells() + idx3_ym1] = phase::velocitySet::w<4>() * phi * (static_cast<scalar_t>(1) - phase::velocitySet::as2() * uz);
+            d.g[4 * size::cells() + idx3_ym1] = phase::velocitySet::w<4>() * phi * (static_cast<scalar_t>(1) - phase::velocitySet::as2() * uy);
         }
 
         __device__ static inline void applyOutflowZ(LBMFields d) noexcept
@@ -225,6 +230,11 @@ namespace lbm
             const label_t y = threadIdx.y + blockIdx.y * blockDim.y;
 
             if (x >= mesh::nx || y >= mesh::ny)
+            {
+                return;
+            }
+
+            if (x == 0 || x == mesh::nx - 1 || y == 0 || y == mesh::ny - 1)
             {
                 return;
             }
