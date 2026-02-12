@@ -64,10 +64,6 @@ int main(int argc, char *argv[])
         {"pxz", &LBMFields::pxz, host::bytesScalar(), true},
         {"pyz", &LBMFields::pyz, host::bytesScalar(), true},
         {"phi", &LBMFields::phi, host::bytesScalar(), true},
-        {"normx", &LBMFields::normx, host::bytesScalar(), true},
-        {"normy", &LBMFields::normy, host::bytesScalar(), true},
-        {"normz", &LBMFields::normz, host::bytesScalar(), true},
-        {"ind", &LBMFields::ind, host::bytesScalar(), true},
         {"fsx", &LBMFields::fsx, host::bytesScalar(), true},
         {"fsy", &LBMFields::fsy, host::bytesScalar(), true},
         {"fsz", &LBMFields::fsz, host::bytesScalar(), true},
@@ -129,8 +125,7 @@ int main(int argc, char *argv[])
     // Base fields (always saved)
     static constexpr auto BASE_FIELDS = std::to_array<host::FieldConfig>({
         {host::FieldID::Phi, "phi", host::FieldDumpShape::Grid3D, true},
-        {host::FieldID::Uy, "uy", host::FieldDumpShape::Grid3D, true},
-        {host::FieldID::Uz, "uz", host::FieldDumpShape::Grid3D, true},
+        {host::FieldID::Rho, "rho", host::FieldDumpShape::Grid3D, true},
     });
 
     // Derived fields from modules (possibly empty)
@@ -180,9 +175,7 @@ int main(int argc, char *argv[])
         dfields.launch<grid3D, block3D, dynamic>(queue, fields, STEP);
 
 #if !BENCHMARK
-        const bool isOutputStep = (STEP % MACRO_SAVE == 0) || (STEP == NSTEPS);
-
-        if (isOutputStep)
+        if ((STEP % MACRO_SAVE == 0) || (STEP == NSTEPS))
         {
             checkCudaErrors(cudaStreamSynchronize(queue));
             std::cout << "Step " << STEP << ": bins in " << SIM_DIR << "\n";

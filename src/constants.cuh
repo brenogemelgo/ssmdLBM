@@ -57,8 +57,8 @@ static constexpr int NSTEPS = 100000;
 
 #elif defined(SAMPLE_MODE)
 
-static constexpr int MACRO_SAVE = 1000;
-static constexpr int NSTEPS = 10000;
+static constexpr int MACRO_SAVE = 100;
+static constexpr int NSTEPS = 1000;
 
 #elif defined(PROFILE_MODE)
 

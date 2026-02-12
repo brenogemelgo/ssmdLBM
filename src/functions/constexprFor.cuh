@@ -55,6 +55,20 @@ namespace device
             }
         }
     }
+
+    template <const label_t Start, const label_t End, const label_t Step, typename F>
+    __device__ inline constexpr void step_constexpr_for(F &&f) noexcept
+    {
+        if constexpr ((Step > 0 && Start < End) || (Step < 0 && Start > End))
+        {
+            f(IntegralConstant<label_t, Start>());
+            constexpr label_t Next = Start + Step;
+            if constexpr ((Step > 0 && Next < End) || (Step < 0 && Next > End))
+            {
+                device::step_constexpr_for<Next, End, Step>(std::forward<F>(f));
+            }
+        }
+    }
 }
 
 #endif

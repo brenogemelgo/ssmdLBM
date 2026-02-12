@@ -104,7 +104,7 @@ namespace lbm
 
                 const scalar_t feq = velocitySet::f_eq<Q>(rho, uu, cu);
                 const scalar_t force = velocitySet::force<Q>(cu, ux, uy, uz, fsx, fsy, fsz);
-                const scalar_t fneq = pop[Q] - feq + force;
+                const scalar_t fneq = pop[Q] - feq + static_cast<scalar_t>(0.5) * force;
 
                 pxx += fneq * cx * cx;
                 pyy += fneq * cy * cy;
@@ -154,6 +154,75 @@ namespace lbm
         const scalar_t fsy = d.fsy[idx3];
         const scalar_t fsz = d.fsz[idx3];
 
+        const scalar_t phi_xp1_yp1_z = d.phi[device::global3(x + 1, y + 1, z)];
+        const scalar_t phi_xp1_y_zp1 = d.phi[device::global3(x + 1, y, z + 1)];
+        const scalar_t phi_xp1_ym1_z = d.phi[device::global3(x + 1, y - 1, z)];
+        const scalar_t phi_xp1_y_zm1 = d.phi[device::global3(x + 1, y, z - 1)];
+        const scalar_t phi_xm1_ym1_z = d.phi[device::global3(x - 1, y - 1, z)];
+        const scalar_t phi_xm1_y_zm1 = d.phi[device::global3(x - 1, y, z - 1)];
+        const scalar_t phi_xm1_yp1_z = d.phi[device::global3(x - 1, y + 1, z)];
+        const scalar_t phi_xm1_y_zp1 = d.phi[device::global3(x - 1, y, z + 1)];
+        const scalar_t phi_x_yp1_zp1 = d.phi[device::global3(x, y + 1, z + 1)];
+        const scalar_t phi_x_yp1_zm1 = d.phi[device::global3(x, y + 1, z - 1)];
+        const scalar_t phi_x_ym1_zm1 = d.phi[device::global3(x, y - 1, z - 1)];
+        const scalar_t phi_x_ym1_zp1 = d.phi[device::global3(x, y - 1, z + 1)];
+
+        scalar_t sgx = lbm::velocitySet::w_1() * (d.phi[device::global3(x + 1, y, z)] - d.phi[device::global3(x - 1, y, z)]) +
+                       lbm::velocitySet::w_2() * (phi_xp1_yp1_z - phi_xm1_ym1_z +
+                                                  phi_xp1_y_zp1 - phi_xm1_y_zm1 +
+                                                  phi_xp1_ym1_z - phi_xm1_yp1_z +
+                                                  phi_xp1_y_zm1 - phi_xm1_y_zp1);
+
+        scalar_t sgy = lbm::velocitySet::w_1() * (d.phi[device::global3(x, y + 1, z)] - d.phi[device::global3(x, y - 1, z)]) +
+                       lbm::velocitySet::w_2() * (phi_xp1_yp1_z - phi_xm1_ym1_z +
+                                                  phi_x_yp1_zp1 - phi_x_ym1_zm1 +
+                                                  phi_xm1_yp1_z - phi_xp1_ym1_z +
+                                                  phi_x_yp1_zm1 - phi_x_ym1_zp1);
+
+        scalar_t sgz = lbm::velocitySet::w_1() * (d.phi[device::global3(x, y, z + 1)] - d.phi[device::global3(x, y, z - 1)]) +
+                       lbm::velocitySet::w_2() * (phi_xp1_y_zp1 - phi_xm1_y_zm1 +
+                                                  phi_x_yp1_zp1 - phi_x_ym1_zm1 +
+                                                  phi_xm1_y_zp1 - phi_xp1_y_zm1 +
+                                                  phi_x_ym1_zp1 - phi_x_yp1_zm1);
+
+        if constexpr (lbm::velocitySet::Q() == 27)
+        {
+            const scalar_t phi_xp1_yp1_zp1 = d.phi[device::global3(x + 1, y + 1, z + 1)];
+            const scalar_t phi_xp1_yp1_zm1 = d.phi[device::global3(x + 1, y + 1, z - 1)];
+            const scalar_t phi_xp1_ym1_zp1 = d.phi[device::global3(x + 1, y - 1, z + 1)];
+            const scalar_t phi_xp1_ym1_zm1 = d.phi[device::global3(x + 1, y - 1, z - 1)];
+            const scalar_t phi_xm1_ym1_zm1 = d.phi[device::global3(x - 1, y - 1, z - 1)];
+            const scalar_t phi_xm1_ym1_zp1 = d.phi[device::global3(x - 1, y - 1, z + 1)];
+            const scalar_t phi_xm1_yp1_zm1 = d.phi[device::global3(x - 1, y + 1, z - 1)];
+            const scalar_t phi_xm1_yp1_zp1 = d.phi[device::global3(x - 1, y + 1, z + 1)];
+
+            sgx += lbm::D3Q27::w_3() * (phi_xp1_yp1_zp1 - phi_xm1_ym1_zm1 +
+                                        phi_xp1_yp1_zm1 - phi_xm1_ym1_zp1 +
+                                        phi_xp1_ym1_zp1 - phi_xm1_yp1_zm1 +
+                                        phi_xp1_ym1_zm1 - phi_xm1_yp1_zp1);
+
+            sgy += lbm::D3Q27::w_3() * (phi_xp1_yp1_zp1 - phi_xm1_ym1_zm1 +
+                                        phi_xp1_yp1_zm1 - phi_xm1_ym1_zp1 +
+                                        phi_xm1_yp1_zm1 - phi_xp1_ym1_zp1 +
+                                        phi_xm1_yp1_zp1 - phi_xp1_ym1_zm1);
+
+            sgz += lbm::D3Q27::w_3() * (phi_xp1_yp1_zp1 - phi_xm1_ym1_zm1 +
+                                        phi_xm1_ym1_zp1 - phi_xp1_yp1_zm1 +
+                                        phi_xp1_ym1_zp1 - phi_xm1_yp1_zm1 +
+                                        phi_xm1_yp1_zp1 - phi_xp1_ym1_zm1);
+        }
+
+        const scalar_t gx = lbm::velocitySet::as2() * sgx;
+        const scalar_t gy = lbm::velocitySet::as2() * sgy;
+        const scalar_t gz = lbm::velocitySet::as2() * sgz;
+
+        const scalar_t ind = math::sqrt(gx * gx + gy * gy + gz * gz);
+        const scalar_t invInd = static_cast<scalar_t>(1) / (ind + static_cast<scalar_t>(1e-9));
+
+        const scalar_t normx = gx * invInd;
+        const scalar_t normy = gy * invInd;
+        const scalar_t normz = gz * invInd;
+
         scalar_t omco;
         const scalar_t phi = d.phi[idx3];
         {
@@ -181,12 +250,9 @@ namespace lbm
                 label_t yy = y + static_cast<label_t>(velocitySet::cy<Q>());
                 label_t zz = z + static_cast<label_t>(velocitySet::cz<Q>());
 
-                d.f[device::global4(xx, yy, zz, Q)] = to_pop(feq + omco * fneq + force);
+                d.f[device::global4(xx, yy, zz, Q)] = to_pop(feq + omco * fneq + static_cast<scalar_t>(0.5) * force);
             });
 
-        const scalar_t normx = d.normx[idx3];
-        const scalar_t normy = d.normy[idx3];
-        const scalar_t normz = d.normz[idx3];
         const scalar_t sharp = physics::gamma * phi * (static_cast<scalar_t>(1) - phi);
 
         device::constexpr_for<0, phase::velocitySet::Q()>(

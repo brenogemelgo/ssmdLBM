@@ -42,7 +42,6 @@ namespace graph
 
         // Phase field
         phase::computePhase<<<grid, block, dynamic, queue>>>(fields);
-        phase::computeNormals<<<grid, block, dynamic, queue>>>(fields);
         phase::computeForces<<<grid, block, dynamic, queue>>>(fields);
 
         // Hydrodynamics

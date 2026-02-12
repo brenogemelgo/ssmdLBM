@@ -142,9 +142,13 @@ namespace lbm
                         const label_t xx = x + static_cast<label_t>(velocitySet::cx<Q>());
                         const label_t yy = y + static_cast<label_t>(velocitySet::cy<Q>());
 
+                        if (xx <= 0 || xx >= mesh::nx - 1 || yy <= 0 || yy >= mesh::ny - 1)
+                        {
+                            return;
+                        }
+
                         const label_t fluidNode = device::global3(xx, yy, 1);
 
-                        constexpr scalar_t w = velocitySet::w<Q>();
                         constexpr scalar_t cx = static_cast<scalar_t>(velocitySet::cx<Q>());
                         constexpr scalar_t cy = static_cast<scalar_t>(velocitySet::cy<Q>());
                         constexpr scalar_t cz = static_cast<scalar_t>(velocitySet::cz<Q>());
@@ -203,9 +207,13 @@ namespace lbm
                         const label_t xx = x + static_cast<label_t>(velocitySet::cx<Q>());
                         const label_t zz = z + static_cast<label_t>(velocitySet::cz<Q>());
 
+                        if (xx <= 0 || xx >= mesh::nx - 1 || zz <= 0 || zz >= mesh::nz - 1)
+                        {
+                            return;
+                        }
+
                         const label_t fluidNode = device::global3(xx, mesh::ny - 2, zz);
 
-                        constexpr scalar_t w = velocitySet::w<Q>();
                         constexpr scalar_t cx = static_cast<scalar_t>(velocitySet::cx<Q>());
                         constexpr scalar_t cy = static_cast<scalar_t>(velocitySet::cy<Q>());
                         constexpr scalar_t cz = static_cast<scalar_t>(velocitySet::cz<Q>());
@@ -266,7 +274,6 @@ namespace lbm
 
                         const label_t fluidNode = device::global3(xx, yy, mesh::nz - 2);
 
-                        constexpr scalar_t w = velocitySet::w<Q>();
                         constexpr scalar_t cx = static_cast<scalar_t>(velocitySet::cx<Q>());
                         constexpr scalar_t cy = static_cast<scalar_t>(velocitySet::cy<Q>());
                         constexpr scalar_t cz = static_cast<scalar_t>(velocitySet::cz<Q>());
@@ -290,7 +297,7 @@ namespace lbm
             const label_t y = threadIdx.x + blockIdx.x * blockDim.x;
             const label_t z = threadIdx.y + blockIdx.y * blockDim.y;
 
-            if (y <= 0 || y >= mesh::ny - 1 || z <= 0 || z >= mesh::nz - 1)
+            if (y >= mesh::ny || z >= mesh::nz)
             {
                 return;
             }
